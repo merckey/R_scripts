@@ -1,0 +1,9 @@
+Package: PCA_name
+Type: Package
+Title: Modification of plotPCA function that allows printing of sample IDs to plot
+Version: 1.0
+Date: 2014-06-16
+Author: David Balli
+Maintainer: dballi@upenn.edu
+Description: More about what it does (maybe more than one line)
+License: What license is it under?
