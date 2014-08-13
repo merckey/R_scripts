@@ -28,24 +28,30 @@ directory <- '/Users/dballi/Desktop/RNAseq_Nicole_Ecad/HTSeq_DESeq2_analysis_GBX
 
 sampleFiles <- grep('s.counts.txt',list.files(directory),value=T)
 
+sampleName <- c("PD2204E_minus","PD2204E_plus",
+                "PD2523E_minus","PD2523E_plus",
+                "PD798E_minus","PD798E_plus")
 # view sampleFiles
 sampleFiles
 
 # set sampleConditions for Nicole's RNAseq ecad neg/pos experiment
 sampleCondition <- c('E_minus','E_plus')
-sampleTable <- data.frame(sampleName = sampleFiles, 
+sampleTable <- data.frame(sampleName = sampleName, 
                           fileName = sampleFiles, 
                           condition = sampleCondition)
 
 # view sampleTable
 sampleTable 
 
-ddsHTseq <- DESeqDataSetFromHTSeqCount(sampleTable=sampleTable, directory = directory, design=~condition)
+ddsHTseq <- DESeqDataSetFromHTSeqCount(sampleTable=sampleTable,
+                                       directory = directory, 
+                                       design= ~condition)
 
 ## view ddsHTseq - should give summary of class, data, etc.
 ddsHTseq
 
-colData(ddsHTseq)$condition<-factor(colData(ddsHTseq)$condition, levels=c('E_plus','E_minus'))
+colData(ddsHTseq)$condition<-factor(colData(ddsHTseq)$condition, 
+                                    levels=c('E_plus','E_minus'))
 
 
 # gut of DESeq2 analysis
@@ -63,14 +69,14 @@ head(res)
 # MA plot of log fold change over the mean of normalized counts 
 # set alpha to 0.05 for genes with FDR < 0.05
 plotMA(res, ylim=c(-12,12), alpha=0.05)
-dev.copy(png,'2014-7-29-MAplot-gbx2group.png')
+dev.copy(png,'2014-8-6-MAplot-gbx2groupmore.png')
 dev.off()
 
 # save data 'res' to csv!
-write.csv(as.data.frame(res),file='2014-7-23-DESeq2_analysis_GBX2group.csv')
+write.csv(as.data.frame(res),file='2014-8-6-DESeq2_analysis_GBX2group.csv')
 
 mcols(res, use.names=T)
-write.csv(as.data.frame(mcols(res,use.name=T)),file='2014-7-23-DESeq2-test-conditions-GBX2group.csv')
+write.csv(as.data.frame(mcols(res,use.name=T)),file='2014-8-6-DESeq2-test-conditions-GBX2group.csv')
 
 # transform raw distrbuted counts for clustering analysis
 rld <- rlogTransformation(dds, blind=T)
@@ -95,8 +101,7 @@ library("RColorBrewer")
 library("gplots")
 distsRL <- dist(t(assay(rld)))
 mat <- as.matrix(distsRL)
-rownames(mat) <- colnames(mat) <- with(colData(dds),
-                                       paste(condition, type, sep=" : "))
+rownames(mat) <- colnames(mat) <- with(colData(dds),paste(condition, type, sep=" : "))
 heatmap.2(mat, trace="none", col = rev(hmcol), margin=c(13, 13))
 dev.copy(png,"2014-7-23-deseq2_heatmaps.png")
 dev.off()
@@ -106,7 +111,7 @@ dev.off()
 library("RColorBrewer")
 library("gplots")
 select <- order(rowMeans(counts(dds,normalized=T)),decreasing=T)[1:3000]
-se#hmcol <- colorRampPalette(brewer.pal(9, 'GnBu'))(100)
+hmcol <- colorRampPalette(brewer.pal(9, 'GnBu'))(100)
 heatmap.2(assay(vsd)[select, ], col=redblue(16),
           Rowv = F, Colv = F, scale= 'non',
           dendrogram = 'none', trace = 'none', margin = c(6,6))
@@ -119,7 +124,7 @@ dev.off()
 # good for visualizing effect of experimental covariats and batch effect
 # ideal for examining primary and matching mets
 # using plotPCAWithNames.R script - can change number of ntop
-print(plotPCAWithNames(rld, intgroup=c('condition')))
+print(plotPCA(rld, intgroup=c('condition')))
 dev.copy(png, "2014-7-23-DESeq2-PCA-gbx2.png")
 dev.off()
 
@@ -157,3 +162,20 @@ plot(1-resFilt$pvalue[orderinPlot],
      (length(resFilt$pvalue)-1):0,pch='.',
      xlab=expression(1-p[i]),ylab=expression(N(p[i])))
 abline(a=0, b=slope, col='red3',lwd=2)
+
+
+ddsClean <- replaceOutliersWithTrimmedMean(dds)
+ddsClean <- DESeq(ddsClean)
+tab <- table(initial = results(dds)$padj < 0.1,
+             cleaned = results(ddsClean)$padj < 0.1)
+addmargins(tab)
+write.csv(as.data.frame(tab),file='2014-8-12-orgGBX2_replacedoutliers.csv')
+resClean <- results(ddsClean)
+resClean <- resClean[order(resClean$padj),]
+head(resClean)
+write.csv(as.data.frame(resClean),file='2014-8-12-orgGBX2_replacedoutliers.csv')
+
+# use for dispersion plot 
+plotDispEsts(dds)
+dev.copy(png, "DESeq_RNAseq_ecad_minusplus_dispersionestimates.png")
+dev.off()

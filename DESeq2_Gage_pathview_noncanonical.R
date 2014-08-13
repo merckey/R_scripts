@@ -56,7 +56,7 @@ exp.fc = deseq2.fc
 out.suffix = 'deseq2'
 
 require(gage)
-kegg.g2 <- kegg.gsets(species = 'mmu',id.type='kegg')
+kegg.gs <- kegg.gsets(species = 'mmu',id.type='kegg')
 kegg.sigmet <- kegg.g2$kg.sets[kegg.g2$sigmet.idx]
 fc.kegg.p <- gage(exp.fc, gsets = kegg.sigmet, 
                   ref =NULL, samp=NULL)
@@ -93,6 +93,11 @@ pv.out.list2 <- sapply(path.ids2[1:10],
                                              kegg.native=F,
                                              sign.pos='bottomleft'))
 
-write.table(fc.kegg.2p$greater,file='2014-8-6-Noncanonical-greater.txt')
+
+
+fc.kegg.up <- esset.grp(fc.kegg.2p$greater, exp.fc , gsets = kegg.g2, ref=NULL,
+                        samp=NULL, test4up=T, output=T, outname = 'Canonical.kegg.up',
+                        make.plot=F)
+
 write.table(fc.kegg.2p$greater,file='2014-8-6-Noncanonical-greater.txt',sep='\t')
 write.table(rbind(fc.kegg.2p$greater,fc.kegg.2p$lesser),file='2014-8-6-Noncanoical-KEGG.txt',sep='\t')

@@ -2,14 +2,13 @@
 ### recipe is from Dave Wheeler's blog at Massey University
 ### http://dwheelerau.com/2014/02/17/how-to-use-deseq2-to-analyse-rnaseq-data/
 ###
-### major differece from DESeq1 is that you don't need to merge individual HT-seq-count files
-# will be comparing 2412, 345, 2204 Ecad +/- as group Canonical-EMT
-# will be comparing 2329, 2523, 2342, 798 Ecad +/- as group non-Canonical-EMT
-#
-# analysis per 2014-7-23 PM on htseq count -intersections-nonempty
+### analysis per 2014-8-12 PM on htseq count -intersections-nonempty
+### controlling for batch
+### removing PD8640 and 1849 as that sample is realy weird 
+
 
 library("DESeq2")
-setwd("~/Desktop/RNAseq_Nicole_Ecad/HTSeq_DESeq2_analysis")
+setwd("~/Desktop/RNAseq_Nicole_Ecad/HTSeq_DESeq2_analysis_batch2/")
 directory <- '/Users/dballi/Desktop/RNAseq_Nicole_Ecad/HTseq_DESeq2_analysis/Counts'
 
 # can merge individual sample fiels (i.e. control 1, control 2, etc.)
@@ -18,58 +17,94 @@ sampleFiles <- grep('PD',list.files(directory),value=T)
 # view sampleFiles
 sampleFiles
 
+sampleBatch <- c("Batch1","Batch1","Batch1","Batch1","Batch1","Batch1",
+                 "Batch1","Batch1","Batch1","Batch1","Batch1","Batch1",
+                 "Batch1","Batch1","Batch2","Batch2")
+
 # set sampleConditions for Nicole's RNAseq ecad neg/pos experiment
 sampleCondition <- c('E_minus','E_plus')
 sampleTable <- data.frame(sampleName = sampleFiles, 
                           fileName = sampleFiles, 
-                          condition = sampleCondition)
+                          condition = sampleCondition,
+                          Batch = sampleBatch)
 
 # view sampleTable
 sampleTable 
 
 ddsHTseq <- DESeqDataSetFromHTSeqCount(sampleTable=sampleTable, 
-                                       directory = directory,
-                                       design=~condition)
+                                       directory = directory, 
+                                       design= ~condition) # + batch)
 
 ## view ddsHTseq - should give summary of class, data, etc.
 ddsHTseq
 
-colData(ddsHTseq)$condition<-factor(colData(ddsHTseq)$condition, levels=c('E_minus','E_plus'))
+colData(ddsHTseq)$condition <- factor(colData(ddsHTseq)$condition, 
+                                      levels=c('E_plus','E_minus'))
 
 
 # gut of DESeq2 analysis
 dds <- DESeq(ddsHTseq)
-res <- results(dds)
-# res <- results(dds)
-res <- res[order(res$padj),]
 
-head(res)
+# multifactor designs
+# can analysis with more than one factor influencing the counts 
+# from manual section 1.5
+
+ddsMF <- dds
+
+design(ddsMF) <- formula(~ Batch + condition)
+
+ddsMF <- DESeq(ddsMF)
+
+plotMA(ddsMF, ylim=c(-8,8),main = "Ecad+/- RNAseq batch effect controlled")
+dev.copy(png, "2014-8-12-DESeq2_MAplot_batchcontrolled_final.png")
+dev.off()
+
+rld2 <- rlogTransformation(ddsMF, blind=T)
+print(plotPCAWithSampleNames(rld2, intgroup=c('condition')))
+dev.copy(png, "2014-8-12-DESeq2_MAplot_PCA_batchcontrol_final.png")
+dev.off()
+
+resMF <- results(ddsMF)
+
+resMF <- resMF[order(resMF$padj),]
+
+head(resMF)
 # should see DataFrame of baseMean, log2Foldchange, stat, pval, padj 
 # padj should be ranked lowest adj pval to high (most sig to least sig)
 # save data 'res' to csv!
-write.csv(as.data.frame(res),file='2014-7-23-DESeq2_pooled_withoutPD1849.csv')
+write.csv(as.data.frame(resMF),file='2014-8-12-DESeq2_Batchcontrol_final.csv')
+
+# clustering analysis
+library("RColorBrewer")
+library("gplots")
+distsRL <- dist(t(assay(rld2)))
+mat <- as.matrix(distsRL)
+rownames(mat) <- colnames(mat) <- with(colData(ddsMF),paste(condition, type, sep=" : "))
+heatmap.2(mat, trace="none", col = rev(hmcol), margin=c(13, 13))
+dev.copy(png,"2014-8-12-DESeq2_batchcontrol_clustering_final.png")
+dev.off()
 
 
+attr(resMF, 'filterThreshold')
 
-attr(res, 'filterThreshold')
-
-plot(attr(res,'filterNumRej'),type='b',ylab='number of rejections')
+plot(attr(resMF,'filterNumRej'),type='b',ylab='number of rejections')
 
 # visualize data wihtout independent filtering
-resNoFilt <- results(dds, independentFiltering=F)
-filter_table <- table(filtering=(res$padj <.1), noFiltering=(resNoFilt$padj < .1))
+resNoFilt <- results(ddsMF, independentFiltering=F)
+filter_table <- table(filtering=(resMF$padj <.1), noFiltering=(resNoFilt$padj < .1))
 resNoFilt <- resNoFilt[order(resNoFilt$padj),]
 head(resNoFilt)
 write.table(as.data.frame(filter_table),file='filter_table')
-write.csv(as.data.frame(resNoFilt),file='2014-7-23-DESeq2_results_NOFILTERING.CSV')
+write.csv(as.data.frame(resNoFilt),file='2014-8-12-DESeq2_batch_results_NOFILTERING.CSV')
 
 
 # plot MAplot http://en.wikipedia.org/wiki/MA_plot
 plotMA(dds, ylim=c(-8,8),main = "Ecad+/- RNAseq")
-dev.copy(png, "2014-7-23-Deseq2_Ecadplusminus_MAplot.png")
+dev.copy(png, "2014-8-8-Deseq2_allsamples_MAplot.png")
 dev.off()
 
 mcols(res, use.names=T)
+write.csv(as.data.frame(mcols(res,use.name=T)),file='2014-8-8-DESeq2-test-conditions-allsamples.csv')
 # produces DataFrame of results of statistical tests
 
 # opitonal annotation of res data - don't need to do this if gene names are specified in HTseq-count
@@ -88,7 +123,7 @@ mcols(res, use.names=T)
 
 # transform raw distrbuted counts for clustering analysis
 rld <- rlogTransformation(dds, blind=T)
-vsd <- varianceStabilizingTransformation(dds, blind=T)
+vsd <- varianceStabilizingTransformation(ddsMF, blind=T)
 
 # scatter plot of rlog transformations between Sample conditions
 head(assay(rld))
@@ -100,6 +135,7 @@ plot(assay(rld)[,7:8],col='#00000020',pch=20,cex=0.3, main = "rlog transformed")
 plot(assay(rld)[,9:10],col='#00000020',pch=20,cex=0.3, main = "rlog transformed")
 plot(assay(rld)[,11:12],col='#00000020',pch=20,cex=0.3, main = "rlog transformed")
 plot(assay(rld)[,13:14],col='#00000020',pch=20,cex=0.3, main = "rlog transformed")
+plot(assay(rld)[,15:16],col='#00000020',pch=20,cex=0.3, main = "rlog transformed")
 # did not have this sample - plot(assay(rld)[,15:16],col='#00000020',pch=20,cex=0.3, main = "rlog transformed")
 
 # views clustering on individual datasets in unbiased way
@@ -156,76 +192,49 @@ mat <- as.matrix(distsRL)
 rownames(mat) <- colnames(mat) <- with(colData(dds),
                                        paste(condition, type, sep=" : "))
 heatmap.2(mat, trace="none", col = rev(hmcol), margin=c(13, 13))
-dev.copy(png,"2014-7-23-deseq2_heatmaps.png")
+dev.copy(png,"2014-8-8-deseq2_heatmaps_withoutPD8640_PD1849.png")
 dev.off()
 
 # PCA analysis
 # run principal component analysis on data
 # good for visualizing effect of experimental covariats and batch effect
 # ideal for examining primary and matching mets
-print(plotPCA(rld, intgroup=c('condition')))
-dev.copy(png, "DESeq2_Ecad_RNAseq_PCA.png")
+
+plotPCAWithSampleNames = function(x, intgroup="condition", ntop=200)  # can change ntop from 200-500
+{
+  library("genefilter")
+  library("lattice")
+  
+  rv = rowVars(assay(x))
+  select = order(rv, decreasing=TRUE)[seq_len(min(ntop, length(rv)))]
+  pca = prcomp(t(assay(x)[select,]))
+  
+  # extract sample names
+  names = colnames(x)
+  
+  fac = factor(apply( as.data.frame(colData(x)[, intgroup, drop=FALSE]), 1, paste, collapse=" : "))
+  
+  if( nlevels(fac) >= 3 )
+    colours = brewer.pal(nlevels(fac), "Dark2")
+  else  
+    colours = c( "red", "blue" )
+  
+  xyplot(
+    PC2 ~ PC1, groups=fac, data=as.data.frame(pca$x), pch=16, cex=1.5,
+    panel=function(x, y, ...) {
+      panel.xyplot(x, y, ...);
+      ltext(x=x, y=y, labels=names, pos=1, offset=0.8, cex=1)
+    },
+    aspect = "iso", col=colours,
+    main = draw.key(key = list(
+      rect = list(col = colours),
+      text = list(levels(fac)),
+      rep = FALSE)))
+}
+
+print(plotPCAWithSampleNames(rld, intgroup=c('condition')))
+dev.copy(png, "2014-8-12-DESeq2-PCA-batchcontrolled-all2.png")
 dev.off()
-
-
-#### replacing outlier value with estimated value as predicted
-#### by distrubution using "trimmed mean" approach
-#### recommended if you have several replicates per treatment
-#### DESeq2 will automatically do this if you have 7 or more replicates
-
-ddsClean <- replaceOutliersWithTrimmedMean(dds)
-ddsClean <- DESeq(ddsClean)
-tab <- table(initial = results(dds)$padj < 0.1,
-             cleaned = results(ddsClean)$padj < 0.1)
-addmargins(tab)
-write.csv(as.data.frame(tab),file='2014-6-10-replaceoutliers-results1.csv')
-resClean <- results(ddsClean)
-resClean <- resClean[order(resClean$padj),]
-head(resClean)
-write.csv(as.data.frame(resClean),file='2014-6-10-replaceoutliers-results2.csv')
-
-# use for dispersion plot 
-plotDispEsts(dds)
-dev.copy(png, "DESeq_RNAseq_ecad_minusplus_dispersionestimates.png")
-dev.off()
-
-### independent filtering to remove any tests
-### that probably won't pass to reduce False discover
-### by reducing total number of tests to perform
-
-# filtering threshold
-attr(res, 'filterThreshold')
-plot(attr(res,'filterNumRej'), type = 'b', ylab='number of rejection')
-dev.copy(png,'deseq2_filtering_threshold.png')
-dev.off()
-
-W <- mcols(dds)$WaldStatistic_condition_treated_vs_untreated
-maxCooks <- apply(assays(dds)[['cooks']],1,max)
-idx <- !is.na(W)
-plot(rank(W[idx]), maxCooks[idx], xlab='rank of Wald statistic',
-     ylab = "maximum Cook's distance per gene",
-     ylim = c(0,5), cex = 0.4, col=rgb(0,0,0,0.3))
-m <- ncol(dds)
-p <- 3
-abline(h=qf(0.99,p,m-p))
-dev.copy(png, 'deseq2_cooksdist.png')
-dev.off()
-
-
-# visualize pvales discarded by filtering
-use <- res$baseMean > attr(res,"filterThreshold")
-table(use)
-h1 <- hist(res$pvalue[!use], breaks=0:50/50, plot=F)
-h2 <- hist(res$pvalue[use], breaks=0:50/50, plot=F)
-colori <- c('do not pass'="khaki", 'pass'="powderblue")
-barplot(height = rbind(h1$counts, h2$counts), beside = F,
-        col = colori, space = 0, main = "", ylab="frequency")
-text(x = c(0, length(h1$counts)), y = 0, label = paste(c(0,1)),
-     adj = c(0.5,1.7), xpd=NA)
-legend("topright", fill=rev(colori), legend=rev(names(colori)))
-
-plot(seq(along=which(showInPlot)), resFilt$pvalue[orderInPlot][showInPlot],
-     pch=".", xlab = expression(rank(p[i])), ylab=expression(p[i]))
-abline(a=0, b=alpha/length(resFilt$pvalue), col="red3", lwd=2)
 
 sessionInfo()
+

@@ -9,11 +9,11 @@
 # analysis per 2014-7-23 PM on htseq count -intersections-nonempty
 
 library("DESeq2")
-setwd("~/Desktop/RNAseq_Nicole_Ecad/HTSeq_DESeq2_analysis")
-directory <- '/Users/dballi/Desktop/RNAseq_Nicole_Ecad/HTseq_DESeq2_analysis/Counts'
+setwd("~/Desktop/RNAseq_Nicole_Ecad/HTSeq_DESeq2_analysis_Canonical_vs_Non-Canonical/Pair-wise comparssions/")
+directory <- '/Users/dballi/Desktop/RNAseq_Nicole_Ecad/HTSeq_DESeq2_analysis/Counts/'
 
 # can merge individual sample fiels (i.e. control 1, control 2, etc.)
-sampleFiles <- grep('PD',list.files(directory),value=T)
+sampleFiles <- grep('counts2',list.files(directory),value=T)
 
 # view sampleFiles
 sampleFiles
@@ -27,27 +27,25 @@ sampleTable <- data.frame(sampleName = sampleFiles,
 # view sampleTable
 sampleTable 
 
-ddsHTseq <- DESeqDataSetFromHTSeqCount(sampleTable=sampleTable, 
-                                       directory = directory,
-                                       design=~condition)
+ddsHTseq <- DESeqDataSetFromHTSeqCount(sampleTable=sampleTable, directory = directory, design=~condition)
 
 ## view ddsHTseq - should give summary of class, data, etc.
 ddsHTseq
 
-colData(ddsHTseq)$condition<-factor(colData(ddsHTseq)$condition, levels=c('E_minus','E_plus'))
+colData(ddsHTseq)$condition<-factor(colData(ddsHTseq)$condition, levels=c('E_plus', 'E_minus'))
 
 
 # gut of DESeq2 analysis
 dds <- DESeq(ddsHTseq)
 res <- results(dds)
 # res <- results(dds)
-res <- res[order(res$padj),]
+res <- res[order(res$pvalue),]
 
 head(res)
 # should see DataFrame of baseMean, log2Foldchange, stat, pval, padj 
 # padj should be ranked lowest adj pval to high (most sig to least sig)
 # save data 'res' to csv!
-write.csv(as.data.frame(res),file='2014-7-23-DESeq2_pooled_withoutPD1849.csv')
+write.csv(as.data.frame(res),file='2014-8-8-DESeq2_PD8640E.csv')
 
 
 
@@ -65,8 +63,8 @@ write.csv(as.data.frame(resNoFilt),file='2014-7-23-DESeq2_results_NOFILTERING.CS
 
 
 # plot MAplot http://en.wikipedia.org/wiki/MA_plot
-plotMA(dds, ylim=c(-8,8),main = "Ecad+/- RNAseq")
-dev.copy(png, "2014-7-23-Deseq2_Ecadplusminus_MAplot.png")
+plotMA(dds, ylim=c(-10,10),main = "Ecad+/- RNAseq")
+dev.copy(png, "2014-8-8_PD8640_MAplot.png")
 dev.off()
 
 mcols(res, use.names=T)
@@ -90,9 +88,15 @@ mcols(res, use.names=T)
 rld <- rlogTransformation(dds, blind=T)
 vsd <- varianceStabilizingTransformation(dds, blind=T)
 
+
+
+# MA plot
+plotMA(res, ylim=c(-12,12), alpha=0.05)
+dev.copy(png,'2014-8-6-MAplot-gbx2groupmore.png')
+dev.off()
 # scatter plot of rlog transformations between Sample conditions
 head(assay(rld))
-plot(log2(1+counts(dds,normalized=T)[,1:2]),col='black',pch=20,cex=0.3, main='Log2 transformed')
+plot(log2(1+counts(dds,normalized=T)[,1:2]),col='black',pch=20,cex=0.3, main='Log transformed')
 plot(assay(rld)[,1:2],col='#00000020',pch=20,cex=0.3, main = "rlog transformed")
 plot(assay(rld)[,3:4],col='#00000020',pch=20,cex=0.3, main = "rlog transformed")
 plot(assay(rld)[,5:6],col='#00000020',pch=20,cex=0.3, main = "rlog transformed")

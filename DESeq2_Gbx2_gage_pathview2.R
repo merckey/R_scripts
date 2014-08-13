@@ -1,19 +1,34 @@
 # gage pathway analysis of GBX2-high group with Intersection not empty specification for summarize overlaps
+# calling PD2523, PD2204, PD798: GBX2 group
 
 
-
-setwd("~/Desktop/RNAseq_Nicole_Ecad/Gage_pathview/")
-library("BiocInstaller", lib.loc="/Library/Frameworks/R.framework/Versions/3.1/Resources/library")
-biocLite(c('pathview','gage','gageData','GenomicAlignments','TxDb.Mmusculus.UCSC.mm10.knownGene'))
+setwd("~/Desktop/RNAseq_Nicole_Ecad/Gage_pathview/Gbx2_group/")
+#library("BiocInstaller", lib.loc="/Library/Frameworks/R.framework/Versions/3.1/Resources/library")
+#biocLite(c('pathview','gage','gageData','GenomicAlignments','TxDb.Mmusculus.UCSC.mm10.knownGene'))
 library(TxDb.Mmusculus.UCSC.mm10.knownGene)
+library(gage)
+library(DESeq2)
+library(Rsamtools)
+library(org.Mm.eg.db)
+library(pathview)
+library(DEXSeq)
+library(GenomicAlignments) # I think I only need this package and not 'Rsamtools'
+
+MulticoreParam(workers=12)
+
 exByGn <- exonsBy(TxDb.Mmusculus.UCSC.mm10.knownGene, 'gene')
 
-library(Rsamtools)
 fls <- list.files(pattern='bam$',full.names=T)
+
+# check Bam files are correct 
+fls 
+
 bamfls <- BamFileList(fls)
 flag <- scanBamFlag(isNotPrimaryRead=F, isProperPair=T)
 param <- ScanBamParam(flag=flag)
-gnCnt <- summarizeOverlaps(exByGn, bamfls, mode="IntersectionNotEmpty",ignore.strand=T,single.end=F, param=param)
+gnCnt <- summarizeOverlaps(exByGn, bamfls, mode="IntersectionNotEmpty",
+                           ignore.strand=T,single.end=F, 
+                           param=param)
 cnts=assay(gnCnt)
 dim(cnts)
 
@@ -26,7 +41,7 @@ cnts.norm=t(t(cnts)/size.factor)
 cnts.norm = log2(cnts.norm+8)
 range(cnts.norm)
 
-library(DESeq2)
+# DESeq2 analysis
 grp.idx <- rep(c('Ecad_plus','Ecad_minus','Ecad_plus','Ecad_minus','Ecad_plus','Ecad_minus'))
 coldata = DataFrame(grp=factor(grp.idx))
 coldata
@@ -41,23 +56,48 @@ exp.fc = deseq2.fc
 out.suffix = 'deseq2'
 
 require(gage)
-kegg.g2 <- kegg.gsets(species = 'mmu',id.type='kegg')
+kegg.gs <- kegg.gsets(species = 'mmu',id.type='kegg')
 kegg.sigmet <- kegg.g2$kg.sets[kegg.g2$sigmet.idx]
-fc.kegg.p <- gage(exp.fc, gsets = kegg.sigmet, ref =NULL, samp=NULL)
-sel <- fc.kegg.p$greater[,'q.val'] < 0.1 &
-  !is.na(fc.kegg.p$less[,'q.val'])
+fc.kegg.p <- gage(exp.fc, gsets = kegg.sigmet, 
+                  ref =NULL, samp=NULL)
+head(fc.kegg.p$greater[,1:5],10)
+
+# or use z-test 
+fc.kegg.2p <- gage(exp.fc, gsets = kegg.sigmet, 
+                   ref=NULL, samp=NULL, saaTest = gs.zTest)
+head(fc.kegg.2p$greater[,1:5],10)
+
+# 14-8-6 using z-test statistics - may have more false positives 
+
+# can alter q.val from 0.1 for pathways passing FDR or just download everything by setting to 0.9
+sel <- fc.kegg.2p$greater[,'q.val'] < 1.0 & !is.na(fc.kegg.p$less[,'q.val'])
 path.ids <- rownames(fc.kegg.p$greater)[sel]
-sel.l <- fc.kegg.p$less[, "q.val"] < 0.1 &
-  +            !is.na(fc.kegg.p$less[,"q.val"])
-path.ids.l <- rownames(fc.kegg.p$less)[sel.l]
+sel.l <- fc.kegg.2p$less[, "q.val"] < 1.0 & !is.na(fc.kegg.p$less[,"q.val"])
+path.ids.l <- rownames(fc.kegg.2p$less)[sel.l]
 path.ids2 <- substr(c(path.ids, path.ids.l), 1, 8)
+
 require(pathview)
-#view first 3 pathways as demo
-pv.out.list <- sapply(path.ids2[1:10],
+#view first 10 pathways as demo
+pv.out.list <- sapply(path.ids2[1:100],
                       function(pid) pathview(gene.data=exp.fc, 
                                              pathway.id = pid,
                                              species = "mouse", 
                                              out.suffix=out.suffix))
 
-# to see axon guidance genes
-# > kegg.g2$kg.sets$mmu04360
+# graphviz 
+pv.out.list2 <- sapply(path.ids2[1:10],
+                       function(pid) pathview(gene.data=exp.fc, 
+                                              pathway.id = pid,
+                                              species = "mouse", 
+                                              out.suffix=out.suffix,
+                                              kegg.native=F,
+                                              sign.pos='bottomleft'))
+
+
+
+fc.kegg.up <- esset.grp(fc.kegg.2p$greater, exp.fc , gsets = kegg.g2, ref=NULL,
+                        samp=NULL, test4up=T, output=T, outname = 'Canonical.kegg.up',
+                        make.plot=F)
+
+write.table(fc.kegg.2p$greater,file='2014-8-6-GBX-group-greater.txt',sep='\t')
+write.table(rbind(fc.kegg.2p$greater,fc.kegg.2p$lesser),file='2014-8-6-GBX2-group-KEGG.txt',sep='\t')
