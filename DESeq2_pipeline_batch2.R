@@ -8,8 +8,8 @@
 ### adding PD1849 back into analysis
 
 library("DESeq2")
-setwd("~/Desktop/RNAseq_Nicole_Ecad/HTSeq_DESeq2_analysis_batch2/")
-directory <- '/Users/dballi/Desktop/RNAseq_Nicole_Ecad/HTseq_DESeq2_analysis/Counts'
+setwd("~/Desktop/RNAseq_Nicole_Ecad/DESeq2_analysis_batch2/")
+directory <- '/Users/dballi/Desktop/RNAseq_Nicole_Ecad/Counts/'
 
 # can merge individual sample fiels (i.e. control 1, control 2, etc.)
 sampleFiles <- grep('PD',list.files(directory),value=T)
@@ -19,7 +19,7 @@ sampleFiles
 
 sampleBatch <- c("Batch1","Batch1","Batch1","Batch1","Batch1","Batch1",
                  "Batch1","Batch1","Batch1","Batch1","Batch1","Batch1",
-                 "Batch1","Batch1","Batch2","Batch2","Batch1","Batch1")
+                 "Batch1","Batch1","Batch2","Batch2")
 
 # set sampleConditions for Nicole's RNAseq ecad neg/pos experiment
 sampleCondition <- c('E_minus','E_plus')
@@ -61,6 +61,7 @@ write.csv(as.data.frame(res),file='2014-8-8-DESeq2_allsamples_withoutPD8640_PD18
 ddsMF <- dds
 design(ddsMF) <- formula(~ Batch + condition)
 ddsMF <- DESeq(ddsMF)
+resMF <- results(ddsMF)
 plotMA(ddsMF, ylim=c(-8,8),main = "Ecad+/- RNAseq batch affect controlled")
 dev.copy(png, "2014-8-12-DESeq2_MAplot_batchcontrolled_allsamples2.png")
 dev.off()
@@ -78,11 +79,36 @@ head(resMF)
 # save data 'res' to csv!
 write.csv(as.data.frame(resMF),file='2014-8-12-DESeq2_allsamples_withBATCHcontrol.csv')
 
+#order by downregulated genes
+resMF.log2 <- resMF[order(resMF$log2FoldChange),]
+resMF.down <- resMF.log2
+head(resMF.down)
+#order by upregulated genes
+resMF.up <- resMF[order(-resMF$log2FoldChange),]
+head(resMF.up)
+
+resMF.up.550 <- resMF.up[1:550,]
+write.csv(as.data.frame(resMF.up.550),file="2014-8-31-DESeq2_lfc_2fold_up_batch2.csv")
+
+resMF.down.116 <- resMF.down[1:116,]
+write.csv(as.data.frame(resMF.down.116),file="2014-8-31-DESeq2_lfc_2fold_down_batch2.csv")
+
+# alternative way to order by log fold change per manual
+# put padj values are all kind of weird 
+resL <- results(dds, lfcThreshold=2.0, altHypothesis="less")
+resL <- resL[order(resL$log2FoldChange),]
+head(resL)
+write.csv(as.data.frame(resL),file='2014-8-31-DESeq2_lfc_2fold_down_batch2.csv')
+
+resH <- results(dds, lfcThreshold = 2.0, altHypothesis='greater')
+resH <- resH[order(-resH$log2FoldChange),]
+head(resH, n = 300)
 
 
-attr(res, 'filterThreshold')
 
-plot(attr(res,'filterNumRej'),type='b',ylab='number of rejections')
+attr(resMF, 'filterThreshold')
+
+plot(attr(resMF,'filterNumRej'),type='b',ylab='number of rejections')
 
 # visualize data wihtout independent filtering
 resNoFilt <- results(dds, independentFiltering=F)
@@ -94,31 +120,16 @@ write.csv(as.data.frame(resNoFilt),file='2014-8-8-DESeq2_results_NOFILTERING.CSV
 
 
 # plot MAplot http://en.wikipedia.org/wiki/MA_plot
-plotMA(dds, ylim=c(-8,8),main = "Ecad+/- RNAseq")
-dev.copy(png, "2014-8-8-Deseq2_allsamples_MAplot.png")
+plotMA(ddsMF, ylim=c(-8,8),main = "Ecad+/- RNAseq")
+dev.copy(png, "2014-9-5-Deseq2_batch2_allsamples_MAplot.png")
 dev.off()
 
 mcols(res, use.names=T)
 write.csv(as.data.frame(mcols(res,use.name=T)),file='2014-8-8-DESeq2-test-conditions-allsamples.csv')
 # produces DataFrame of results of statistical tests
-
-# opitonal annotation of res data - don't need to do this if gene names are specified in HTseq-count
-#library(org.Mm.eg.db)
-
-#keytypes(org.Mm.eg.db)
-
-#fbids <- rownames(res)
-#cols <- 'SYMBOL'
-#annots <- select(org.Mm.eg.db,keys=fbids,cols=cols,keytype='ENTREZID')
-#res <- cbind(entrezid=rownames(as.data.frame(res),as.data.frame(res)))
-#new_res <- merge(res,annots,by.x='entrezid',by.y='ENTREZID')
-
-#write.csv(new_res,file='DESEQ_results_experimentalname_annotated.csv')
-
-
 # transform raw distrbuted counts for clustering analysis
-rld <- rlogTransformation(dds, blind=T)
-vsd <- varianceStabilizingTransformation(ddsMF, blind=T)
+rldMF <- rlogTransformation(ddsMF, blind=T)
+vsdMF <- varianceStabilizingTransformation(ddsMF, blind=T)
 
 # scatter plot of rlog transformations between Sample conditions
 head(assay(rld))
@@ -131,7 +142,9 @@ plot(assay(rld)[,9:10],col='#00000020',pch=20,cex=0.3, main = "rlog transformed"
 plot(assay(rld)[,11:12],col='#00000020',pch=20,cex=0.3, main = "rlog transformed")
 plot(assay(rld)[,13:14],col='#00000020',pch=20,cex=0.3, main = "rlog transformed")
 plot(assay(rld)[,15:16],col='#00000020',pch=20,cex=0.3, main = "rlog transformed")
-# did not have this sample - plot(assay(rld)[,15:16],col='#00000020',pch=20,cex=0.3, main = "rlog transformed")
+#plot(assay(rld)[,15:16],col='#00000020',pch=20,cex=0.3, main = "rlog transformed")
+
+
 
 # views clustering on individual datasets in unbiased way
 par(mai = ifelse(1:4 <= 2, par('mai'),0))
@@ -157,29 +170,44 @@ meanSdPlot(assay(vsd[notAllZero,]), ylim = c(0,4))
 #heatmap of data
 library("RColorBrewer")
 library("gplots")
-select <- order(rowMeans(counts(dds,normalized=T)),decreasing=T)[1:30]
-hmcol <- colorRampPalette(brewer.pal(9, 'GnBu'))(100)
-heatmap.2(counts(dds, normalized=T)[select,],col=hmcol,
-          Rowv = F, Colv = F, scale='none',
-          dendrogram='none',trace='none',margin=c(10,6))
-dev.copy(png, "2014-7-23-DESeq2_heatmap1.png")
-dev.off()
-# using the rlog transformed data 'rld'
-heatmap.2(assay(rld)[select, ], col=hmcol,
-          Rowv=F, Colv = F, scale = 'none',
-          dendrogram ='none', trace='none',margin=c(10,6))
-dev.copy(png, "2014-7-23-DESeq2_heatmap2.png")
-dev.off()
-heatmap.2(assay(vsd)[select, ], col=hmcol,
-          Rowv = F, Colv = F, scale= 'non',
-          dendrogram = 'none', trace = 'none', margin = c(10,6))
-dev.copy(png, '2014-7-23-DESeq2_heatmap3.png')
+# 1000 top fold change genes
+select <- order(rowMeans(counts(ddsMF,normalized=T)),decreasing=T)[1:1000]
+my_palette <- colorRampPalette(c("blue",'white','red'))(n=1000)
+heatmap.2(assay(vsdMF)[select,], col=my_palette,
+          scale="row", key=T, keysize=1,symkey=T,density.info="none", 
+          trace="none",cexCol=0.6, labRow=F,
+          main="Transcriptome of EMT populations")
+dev.copy(png, "2014-9-5-DESeq2_heatmap_top1000.png")
 dev.off()
 
-# heatmap 1 = raw counts
-# heatmap 2 = regularized log transformation
-# heatmap 3 = variance stabilizing transformation
-# transformation shrinks the variance 
+# to specify individual genes from heatmap
+sample <- rowMeans(counts(ddsMF))
+select[1:10]
+# will give you vector of numbers
+[1]  4858 19818  2035 11958 17871 11417  6058 17649 21136
+[10]  5752
+sample[4858] # will give you gene name and normalized value
+
+# 550 top fold change genes
+select <- order(rowMeans(counts(ddsMF,normalized=T)),decreasing=T)[1:550]
+my_palette <- colorRampPalette(c("blue",'white','red'))(n=1000)
+heatmap.2(assay(vsdMF)[select,], col=my_palette,
+          scale="row", key=T, keysize=1,symkey=T,density.info="none", 
+          trace="none",cexCol=0.6, labRow=F,
+          main="Transcriptome of EMT populations")
+dev.copy(png, "2014-9-5-DESeq2_heatmap_top550.png")
+dev.off()
+
+select.padj = order(res$padj,decreasing=FALSE)[1:400]
+my_palette <- colorRampPalette(c("blue",'white','red'))(n=1000)
+par(cex.main=0.8)
+p3 <-heatmap.2(assay(vsd)[select.padj,], col=my_palette,
+          scale="row", key=T, keysize=1,symkey=T,density.info="none", 
+          trace="none",cexCol=0.6, labRow=F, margins=c(8,6),
+          main="Transcriptome of EMT populations")
+dev.copy(png, "2014-9-5-DESeq2_heatmap_padj_top4002.png")
+dev.off()
+
 
 # clustering analysis
 distsRL <- dist(t(assay(rld)))
@@ -228,7 +256,7 @@ plotPCAWithSampleNames = function(x, intgroup="condition", ntop=200)  # can chan
 }
 
 print(plotPCAWithSampleNames(rld, intgroup=c('condition')))
-dev.copy(png, "2014-8-12-DESeq2-PCA-batchcontrolled-all2.png")
+dev.copy(png, "2014-9-10--PCA-batch-names.png")
 dev.off()
 
 

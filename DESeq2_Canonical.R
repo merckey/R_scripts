@@ -1,25 +1,25 @@
 ################################
 # 2014-8-13
-# Comparrison of EMT-noncanonical samples with PD 9210 includes
+# Comparrison of EMT-canonical samples : PD2204, PD2412, PD354
 # will do calculations for batch control
 
 library("DESeq2")
-setwd("~/Desktop/RNAseq_Nicole_Ecad/DESeq2_analysis_Canonical_vs_Non-Canonical/non-Canonical/")
-directory <- '/Users/dballi/Desktop/RNAseq_Nicole_Ecad/DESeq2_analysis_Canonical_vs_Non-Canonical/non-Canonical/'
+setwd("~/Desktop/RNAseq_Nicole_Ecad/DESeq2_analysis_Canonical_vs_Non-Canonical/Canonical")
+directory <- '/Users/dballi/Desktop/RNAseq_Nicole_Ecad/DESeq2_analysis_Canonical_vs_Non-Canonical/Canonical/'
 
-sampleFiles <- grep('E_',list.files(directory),value=T)
+sampleFiles <- grep('PD',list.files(directory),value=T)
 
-sampleBatch <- c("Batch1","Batch1","Batch1","Batch1","Batch1","Batch1",
-                 "Batch1","Batch1","Batch2","Batch2")
+# view sampleFiles
+sampleFiles
 
+# set sampleConditions for Nicole's RNAseq ecad neg/pos experiment
 sampleCondition <- c('E_minus','E_plus')
 sampleTable <- data.frame(sampleName = sampleFiles, 
                           fileName = sampleFiles, 
-                          condition = sampleCondition,
-                          Batch = sampleBatch)
+                          condition = sampleCondition)
+
 # view sampleTable
 sampleTable 
-
 
 ddsHTseq <- DESeqDataSetFromHTSeqCount(sampleTable=sampleTable, directory = directory, design=~condition)
 
@@ -32,14 +32,6 @@ colData(ddsHTseq)$condition<-factor(colData(ddsHTseq)$condition, levels=c('E_plu
 # gut of DESeq2 analysis
 dds <- DESeq(ddsHTseq)
 res <- results(dds)
-
-ddsMF <- dds
-
-design(ddsMF) <- formula(~ Batch + condition)
-
-# gut of DESeq2 analysis controlling for Batch
-ddsMF <- DESeq(ddsMF)
-
 
 # since only comparing 1 sample for each condition - multiple hypothesis testing will not work
 # instead - I am sorting hits based on lowest p-value
@@ -56,57 +48,56 @@ mcols(res, use.names=T)
 write.csv(as.data.frame(mcols(res,use.name=T)),file='2014-8-9-DESeq2-test-conditions-nonCanonical.csv')
 
 ddsMF <- dds
-design(ddsMF) <- formula(~ Batch + condition)
+# design(ddsMF) <- formula(~ Batch + condition) # don't need to do this since all batch 1 
 ddsMF <- DESeq(ddsMF)
 resMF <- results(ddsMF)
 resMF <- resMF[order(resMF$padj),]
 
 head(resMF)
 
-
+#order by downregulated genes
+resMF.log2 <- resMF[order(resMF$log2FoldChange),]
+resMF.down <- resMF.log2
+head(resMF.down)
 #order by upregulated genes
 resMF.up <- resMF[order(-resMF$log2FoldChange),]
 head(resMF.up)
 
-resMF.up[1:200,]
-write.csv(as.data.frame(resMF.up.550),file="2014-8-31-DESeq2_lfc_2fold_up_batch2.csv")
+resMF.up[1:215,]
+write.csv(as.data.frame(resMF.up.214 ),file="2014-9-4-DESeq2_lfc_2fold_up_Canonical.csv")
 
 resMF.down.116 <- resMF.down[1:116,]
-write.csv(as.data.frame(resMF.down.116),file="2014-8-31-DESeq2_lfc_2fold_down_batch2.csv")
+write.csv(as.data.frame(resMF.down.411),file="2014-9-4-DESeq2_lfc_2fold_down_Canonical.csv")
 
-# transform raw distrbuted counts for clustering analysis
-rld <- rlogTransformation(dds, blind=T)
-vsd <- varianceStabilizingTransformation(ddsMF, blind=T)
-
+vsd <- varianceStabilizingTransformation(dds, blind=T)
 #heatmap of data
 library("RColorBrewer")
 library("gplots")
 # 200 top fold change genes
-select <- order(rowMeans(counts(ddsMF,normalized=T)),decreasing=T)[1:200]
+select <- order(rowMeans(counts(dds,normalized=T)),decreasing=T)[1:214]
 my_palette <- colorRampPalette(c("blue",'white','red'))(n=1000)
 par(cex.main=1)
 heatmap.2(assay(vsd)[select,], col=my_palette,
           scale="row", key=TRUE, keysize=1,symkey=T,density.info="none", 
           trace="none",cexCol=0.6, labRow=F,
-          main="Non-Canonical EMT transcriptome")
-dev.copy(png, "2014-9-5-DESeq2_heatmap_noncanonical_top.png")
+          main="Canonical EMT transcriptome")
+dev.copy(png, "2014-9-5-DESeq2_heatmap_canonical_top221_2.png")
 dev.off()
 
-# top DE significant genes padj < 0.2 
-select.padj = order(res$padj,decreasing=F)[1:255]
+#order by padj
+select.padj = order(res$padj,decreasing=F)[1:100]
 my_palette <- colorRampPalette(c("blue",'white','red'))(n=1000)
 par(cex.main=1)
 heatmap.2(assay(vsd)[select.padj,], col=my_palette,
           Rowv=F, scale="row", key=TRUE, keysize=1,symkey=T,density.info="none", 
           trace="none",cexCol=0.6, labRow=F, margins=c(6,6),
-          main="Non-Canonical EMT transcriptome")
-dev.copy(png, "2014-9-8-DESeq2_heatmap_noncanonical_padjtop255.png")
+          main="Canonical EMT transcriptome")
+dev.copy(png, "2014-9-8-DESeq2_heatmap_canonical_padjtop100.png")
 dev.off()
 
-
-
-
-
+# transform raw distrbuted counts for clustering analysis
+rld <- rlogTransformation(dds, blind=T)
+vsd <- varianceStabilizingTransformation(dds, blind=T)
 
 # views clustering on individual datasets in unbiased way
 par(mai = ifelse(1:4 <= 2, par('mai'),0))
@@ -131,6 +122,18 @@ rownames(mat) <- colnames(mat) <- with(colData(dds),
                                        paste(condition, type, sep=" : "))
 heatmap.2(mat, trace="none", col = rev(hmcol), margin=c(13, 13))
 dev.copy(png,"2014-7-23-deseq2_heatmaps.png")
+dev.off()
+
+
+#heatmap of data
+library("RColorBrewer")
+library("gplots")
+select <- order(rowMeans(counts(dds,normalized=F)),decreasing=T)[1:3000]
+se#hmcol <- colorRampPalette(brewer.pal(9, 'GnBu'))(100)
+heatmap.2(assay(rld)[select, ], col=redblue(16),
+          Rowv = F, Colv = F, scale= 'non',
+          dendrogram = 'none', trace = 'none', margin = c(6,6))
+dev.copy(png, '2014-7-23-DESeq2_heatmap10.png')
 dev.off()
 
 

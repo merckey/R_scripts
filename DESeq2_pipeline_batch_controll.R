@@ -53,6 +53,7 @@ ddsMF <- dds
 
 design(ddsMF) <- formula(~ Batch + condition)
 
+# gut of DESeq2 analysis controlling for Batch
 ddsMF <- DESeq(ddsMF)
 
 plotMA(ddsMF, ylim=c(-8,8),main = "Ecad+/- RNAseq batch effect controlled")

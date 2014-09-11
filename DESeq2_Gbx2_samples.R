@@ -23,10 +23,10 @@
 # calling PD2523, PD2204, PD798: GBX2 group
 
 library("DESeq2")
-setwd("~/Desktop/RNAseq_Nicole_Ecad/HTSeq_DESeq2_analysis_GBX2_group/")
-directory <- '/Users/dballi/Desktop/RNAseq_Nicole_Ecad/HTSeq_DESeq2_analysis_GBX2_group/'
+setwd("~/Desktop/RNAseq_Nicole_Ecad/DESeq2_analysis_GBX2_group/")
+directory <- '~/Desktop/RNAseq_Nicole_Ecad/DESeq2_analysis_GBX2_group/'
 
-sampleFiles <- grep('s.counts.txt',list.files(directory),value=T)
+sampleFiles <- grep('PD',list.files(directory),value=T)
 
 sampleName <- c("PD2204E_minus","PD2204E_plus",
                 "PD2523E_minus","PD2523E_plus",
@@ -69,7 +69,7 @@ head(res)
 # MA plot of log fold change over the mean of normalized counts 
 # set alpha to 0.05 for genes with FDR < 0.05
 plotMA(res, ylim=c(-12,12), alpha=0.05)
-dev.copy(png,'2014-8-6-MAplot-gbx2groupmore.png')
+dev.copy(png,'2014-9-5-MAplot-gbx2groupmore.png')
 dev.off()
 
 # save data 'res' to csv!
@@ -107,19 +107,26 @@ dev.copy(png,"2014-7-23-deseq2_heatmaps.png")
 dev.off()
 
 
+resMF.up <- res[order(-res$log2FoldChange),]
+head(resMF.up)
+
+resMF.up[1:700,]
+
 #heatmap of data
+
 library("RColorBrewer")
 library("gplots")
-select <- order(rowMeans(counts(dds,normalized=T)),decreasing=T)[1:3000]
-hmcol <- colorRampPalette(brewer.pal(9, 'GnBu'))(100)
-heatmap.2(assay(vsd)[select, ], col=redblue(16),
-          Rowv = F, Colv = F, scale= 'non',
-          dendrogram = 'none', trace = 'none', margin = c(6,6))
-dev.copy(png, '2014-7-23-DESeq2_heatmap10.png')
+# X top fold change genes
+select <- order(rowMeans(counts(dds,normalized=T)),decreasing=T)[1:500]
+my_palette <- colorRampPalette(c("blue",'white','red'))(n=1000)
+par(cex.main=.7)
+heatmap.2(assay(vsd)[select,], col=my_palette,
+          scale="row", key=T, keysize=1,symkey=T,density.info="none", 
+          trace="none",cexCol=0.5, labRow=F,
+          main="Transcriptome of Gbx2-High tumors")
+dev.copy(png,"2014-9-5-heatmap-gbx2group.png")
 dev.off()
-
-
-# PCA analysis
+ # PCA analysis
 # run principal component analysis on data
 # good for visualizing effect of experimental covariats and batch effect
 # ideal for examining primary and matching mets

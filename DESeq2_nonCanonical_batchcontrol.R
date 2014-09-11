@@ -26,12 +26,15 @@ sampleTable <- data.frame(sampleName = sampleFiles,
 # view sampleTable
 sampleTable 
 
-ddsHTseq <- DESeqDataSetFromHTSeqCount(sampleTable=sampleTable, directory = directory, design=~condition)
+ddsHTseq <- DESeqDataSetFromHTSeqCount(sampleTable=sampleTable,
+                                       directory = directory, 
+                                       design=~condition)
 
 ## view ddsHTseq - should give summary of class, data, etc.
 ddsHTseq
 
-colData(ddsHTseq)$condition<-factor(colData(ddsHTseq)$condition, levels=c('E_plus','E_minus'))
+colData(ddsHTseq)$condition<-factor(colData(ddsHTseq)$condition, 
+                                    levels=c('E_plus','E_minus'))
 
 
 # gut of DESeq2 analysis
@@ -51,10 +54,12 @@ plotMA(ddsMF, ylim=c(-8,8),main = "Ecad+/- RNAseq batch effect controlled")
 dev.copy(png, "2014-8-12-DESeq2_MAplot_batchcontrolled_final.png")
 dev.off()
 
-rld2 <- rlogTransformation(ddsMF, blind=T)
-print(plotPCAWithSampleNames(rld2, intgroup=c('condition')))
-dev.copy(png, "2014-8-12-DESeq2_MAplot_PCA_batchcontrol_final.png")
-dev.off()
+
+# did not do this 2014-8-13
+rld <- rlogTransformation(ddsMF, blind=T)
+#print(plotPCAWithSampleNames(rld2, intgroup=c('condition')))
+#dev.copy(png, "2014-8-12-DESeq2_MAplot_PCA_batchcontrol_final.png")
+#dev.off()
 
 resMF <- results(ddsMF)
 
@@ -64,12 +69,12 @@ head(resMF)
 # should see DataFrame of baseMean, log2Foldchange, stat, pval, padj 
 # padj should be ranked lowest adj pval to high (most sig to least sig)
 # save data 'res' to csv!
-write.csv(as.data.frame(resMF),file='2014-8-12-DESeq2_Batchcontrol_final.csv')
+write.csv(as.data.frame(resMF),file='2014-8-13-DESeq2_nonCanonical_Batchcontrol_final.csv')
 
 # clustering analysis
 library("RColorBrewer")
 library("gplots")
-distsRL <- dist(t(assay(rld2)))
+distsRL <- dist(t(assay(rld)))
 mat <- as.matrix(distsRL)
 rownames(mat) <- colnames(mat) <- with(colData(ddsMF),paste(condition, type, sep=" : "))
 heatmap.2(mat, trace="none", col = rev(hmcol), margin=c(13, 13))
