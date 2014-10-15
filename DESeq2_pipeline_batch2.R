@@ -10,6 +10,8 @@
 library("DESeq2")
 setwd("~/Desktop/RNAseq_Nicole_Ecad/DESeq2_analysis_batch2/")
 directory <- '/Users/dballi/Desktop/RNAseq_Nicole_Ecad/Counts/'
+load("2014-10-7-batch2.RData")
+load("2014-10-7-2D-PCA_ggplot2.RData")
 
 # can merge individual sample fiels (i.e. control 1, control 2, etc.)
 sampleFiles <- grep('PD',list.files(directory),value=T)
@@ -79,6 +81,18 @@ head(resMF)
 # save data 'res' to csv!
 write.csv(as.data.frame(resMF),file='2014-8-12-DESeq2_allsamples_withBATCHcontrol.csv')
 
+resdata <- merge(as.data.frame(resMF), as.data.frame(assay(ddsMF,normalized=T)), by='row.names',sort=F)
+names(resdata)[1] <- 'gene'
+head(resdata)
+write.csv(resdata, file="2014-10-13-results-DESeq2-with-normalized.csv")
+write.csv(as.data.frame(assay(ddsMF,normalized=T)), file="2014-10-13-DESeq2-ddsMF-normalized.csv")
+
+# add value 8 to each cell for log fc calc
+ddsMF_8 <- (assay(ddsMF) + 8)
+ddsMF_8
+write.csv(as.data.frame(ddsMF_8), file="2014-10-13-DESeq2-ddsMF_8.csv")
+
+
 #order by downregulated genes
 resMF.log2 <- resMF[order(resMF$log2FoldChange),]
 resMF.down <- resMF.log2
@@ -115,7 +129,7 @@ resNoFilt <- results(dds, independentFiltering=F)
 filter_table <- table(filtering=(res$padj <.1), noFiltering=(resNoFilt$padj < .1))
 resNoFilt <- resNoFilt[order(resNoFilt$padj),]
 head(resNoFilt)
-write.table(as.data.frame(filter_table),file='filter_table')
+
 write.csv(as.data.frame(resNoFilt),file='2014-8-8-DESeq2_results_NOFILTERING.CSV')
 
 
@@ -130,6 +144,9 @@ write.csv(as.data.frame(mcols(res,use.name=T)),file='2014-8-8-DESeq2-test-condit
 # transform raw distrbuted counts for clustering analysis
 rldMF <- rlogTransformation(ddsMF, blind=T)
 vsdMF <- varianceStabilizingTransformation(ddsMF, blind=T)
+
+# log2 transformation 
+logcounts <- log2(counts(ddsMF, normalized=T) + 1)
 
 # scatter plot of rlog transformations between Sample conditions
 head(assay(rld))
@@ -148,13 +165,13 @@ plot(assay(rld)[,15:16],col='#00000020',pch=20,cex=0.3, main = "rlog transformed
 
 # views clustering on individual datasets in unbiased way
 par(mai = ifelse(1:4 <= 2, par('mai'),0))
-px <- counts(dds)[,1] / sizeFactors(dds)[1]
+px <- counts(ddsMF)[,1] / sizeFactors(dds)[1]
 ord <- order(px)
 ord <- ord[px[ord] < 150]
 ord <- ord[seq(1,length(ord),length=50)]
 last <- ord[length(ord)]
 vstcol <- c('blue','black')
-matplot(px[ord], cbind(assay(vsd)[,1], log2(px))[ord, ],type='l', lty = 1, col=vstcol, xlab = 'n', ylab = 'f(n)')
+matplot(px[ord], cbind(assay(vsdMF)[,1], log2(px))[ord, ],type='l', lty = 1, col=vstcol, xlab = 'n', ylab = 'f(n)')
 legend('bottomright',legend=c(expression('variance stabilizing transformation'), expression(log[2](n/s[1]))), fill=vstcol)
 dev.copy(png,"2014-7-23-DESeq2_variance_stabilizing.png")
 # axis is square root of variance over the mean for all samples
@@ -171,9 +188,9 @@ meanSdPlot(assay(vsd[notAllZero,]), ylim = c(0,4))
 library("RColorBrewer")
 library("gplots")
 # 1000 top fold change genes
-select <- order(rowMeans(counts(ddsMF,normalized=T)),decreasing=T)[1:1000]
+select <- order(rowMeans(counts(vsdMF,normalized=T)),decreasing=T)[1:2000]
 my_palette <- colorRampPalette(c("blue",'white','red'))(n=1000)
-heatmap.2(assay(vsdMF)[select,], col=my_palette,
+heatmap.2(log(counts(ddsMF)), col=my_palette,
           scale="row", key=T, keysize=1,symkey=T,density.info="none", 
           trace="none",cexCol=0.6, labRow=F,
           main="Transcriptome of EMT populations")
@@ -182,11 +199,10 @@ dev.off()
 
 # to specify individual genes from heatmap
 sample <- rowMeans(counts(ddsMF))
-select[1:10]
+select[1:50]
 # will give you vector of numbers
-[1]  4858 19818  2035 11958 17871 11417  6058 17649 21136
-[10]  5752
-sample[4858] # will give you gene name and normalized value
+
+sample[select[1:50]] # will give you gene name and normalized value for top 32 genes
 
 # 550 top fold change genes
 select <- order(rowMeans(counts(ddsMF,normalized=T)),decreasing=T)[1:550]
@@ -210,7 +226,7 @@ dev.off()
 
 
 # clustering analysis
-distsRL <- dist(t(assay(rld)))
+distsRL <- dist(t(assay(vsdMF)))
 mat <- as.matrix(distsRL)
 rownames(mat) <- colnames(mat) <- with(colData(dds),
                                        paste(condition, type, sep=" : "))
@@ -222,43 +238,92 @@ dev.off()
 # run principal component analysis on data
 # good for visualizing effect of experimental covariats and batch effect
 # ideal for examining primary and matching mets
+# 3D PCA plot and 2D PCA
+library(grDevices)
+library(rgl)
+library("genefilter")
+library("ggplot2")
 
-plotPCAWithSampleNames = function(x, intgroup="condition", ntop=200)  # can change ntop from 200-500
-{
-  library("genefilter")
-  library("lattice")
-  
-  rv = rowVars(assay(x))
-  select = order(rv, decreasing=TRUE)[seq_len(min(ntop, length(rv)))]
-  pca = prcomp(t(assay(x)[select,]))
-  
-  # extract sample names
-  names = colnames(x)
-  
-  fac = factor(apply( as.data.frame(colData(x)[, intgroup, drop=FALSE]), 1, paste, collapse=" : "))
-  
-  if( nlevels(fac) >= 3 )
-    colours = brewer.pal(nlevels(fac), "Dark2")
-  else  
-    colours = c( "red", "blue" )
-  
-  xyplot(
-    PC2 ~ PC1, groups=fac, data=as.data.frame(pca$x), pch=16, cex=1.5,
-    panel=function(x, y, ...) {
-      panel.xyplot(x, y, ...);
-      ltext(x=x, y=y, labels=names, pos=1, offset=0.8, cex=1)
-    },
-    aspect = "iso", col=colours,
-    main = draw.key(key = list(
-      rect = list(col = colours),
-      text = list(levels(fac)),
-      rep = FALSE)))
-}
+rv <- rowVars(assay(vsdMF))
+select <- order(rv, decreasing=T)[seq_len(min(1000,length(rv)))] # as of 10-7-14 - 500 top variable genes
+pc <- prcomp(t(assay(vsdMF)[select,]))
 
-print(plotPCAWithSampleNames(rld, intgroup=c('condition')))
-dev.copy(png, "2014-9-10--PCA-batch-names.png")
-dev.off()
+# 2D PCA plot with ggplot2
+scores <- data.frame(sampleFiles, pc$x, condition, grouping, fit$classification, stringsAsFactors=T)
+scores
 
+scores$grouping <- as.factor(scores$grouping)
+pca <- ggplot(scores, aes(x=PC1, y=PC2, col=scores$grouping))  # or factor(grouping)
+(pca <- pca + geom_point(size = 5))
+(pca <- pca + ggtitle("Principal Components"))
+(pca <- pca + scale_color_brewer(name = "", palette="Set1"))
+(pca <- pca + theme(
+  plot.title = element_text(face='bold'),
+  legend.justification=c(0,0),
+  legend.position=c(0,0), 
+  legend.key = element_rect(fill='NA'),
+  legend.text = element_text(size=10, face="bold"),
+  axis.text.y=element_text(colour="Black"), 
+  axis.text.x=element_text(colour="Black"),
+  axis.title.x=element_text(face="bold"), 
+  axis.title.y=element_text(face='bold'),
+  panel.grid.major.x=element_blank(), 
+  panel.grid.major.y=element_blank(),
+  panel.grid.minor.x=element_blank(), 
+  panel.grid.minor.y=element_blank(), 
+  panel.background=element_rect(color='black',fill=NA)
+  ))
+
+save(pca, file="2014-10-10-2D-PCA_ggplot2_3group.RData")
+ggsave("2014-10-10-2D-PCA_ggplot2_3group.png")
+
+# using grouping to ID sub classes
+grouping <- factor(c("Canonical","Canonical",
+                     "Non-Canonical","Non-Canonical",
+                     "Non-Canonical","Non-Canonical",
+                     "Canonical","Canonical",
+                     "Non-Canonical","Non-Canonical",
+                     "Canonical","Canonical",
+                     "Non-Canonical","Non-Canonical",
+                     "Non-Canonical","Non-Canonical"))
+
+# set condition
+condition <- factor(c("Ecad-","Ecad+", "Ecad-","Ecad+", 
+               "Ecad-","Ecad+", "Ecad-","Ecad+", 
+               "Ecad-","Ecad+", "Ecad-","Ecad+",
+               "Ecad-","Ecad+", "Ecad-","Ecad+"))
+condition <- as.integer(condition)
+
+
+
+# model-based clustering alorithm (mclust)
+# selecting model - multivariat mixture = VII = diagonal, varying volume and shape
+fit <- Mclust(pc$x, G=3, modelNames = "VII")
+fit$classification
+# 3D pca with rgl plot3d using same pc 
+plot3d(pc$x,size=15,lit=T, box=F, alpha=0.75, axes=F, col=grouping)
+text3d(pc$x, text=sampleFiles, adj=-0.2, font=1, cex=0.8, main="Principal Components")
+grid3d(side='z',at=list(z=0))
+# plot3d(pc$x, col=pca$cluster)
+# save as postscript pdf file then edit in gimp
+rgl.snapshot("2014-10-9-3D-pca_view2.png",'png')
+
+# or use the pca3d package 
+# I prefere this 
+library("pca3d")
+threedpca <- pca3d(pc, show.plane=F, col=scores$grouping, radius=2, axes.color='black',
+      show.axe.titles=F)
+rgl.snapshot("2014-10-10-pca3d.grouping.png",'png')
+save(threedpca, file="2014-10-10-3d-PCA_3group.RData")
+
+# optional K-means based clustering
+km <- kmeans(assay(vsdMF),3) # not sure how to integrate into plot
+pc$cluster <- as.integer(km$cluster)
+plot3d(pc$x,size=10,lit=T, axes=F,box=F)
+text3d(pc$x, text=sampleFiles, adj=-0.2, font=0.5, col=colorRampPalette(c("red",'red'))(2))
+plot3d(pc$x, col=pca$cluster)
+
+save.image("~/Desktop/RNAseq_Nicole_Ecad/DESeq2_analysis_batch2/2014-10-10-batch2.RData")
 
 #### replacing outlier value with estimated value as predicted
 #### by distrubution using "trimmed mean" approach
@@ -320,5 +385,33 @@ plot(seq(along=which(showInPlot)), resFilt$pvalue[orderInPlot][showInPlot],
      pch=".", xlab = expression(rank(p[i])), ylab=expression(p[i]))
 abline(a=0, b=alpha/length(resFilt$pvalue), col="red3", lwd=2)
 
+
+volcanoplot <- function (x, lfcthresh=2, sigthresh=0.05, main="Volcano Plot", legendpos="topleft", labelsig=TRUE, textcx=1, ...) {
+  with(x, plot(log2FoldChange, -log10(pvalue), pch=20, main=main, ...))
+  with(subset(x, padj < sigthresh ), points(log2FoldChange, -log10(pvalue), pch=20, col="red", ...))
+  with(subset(x, abs(log2FoldChange) > lfcthresh), points(log2FoldChange, -log10(pvalue), pch=20, col="orange", ...))
+  with(subset(x, padj < sigthresh & abs(log2FoldChange) > lfcthresh), points(log2FoldChange, -log10(pvalue), pch=20, col="green", ...))
+  if (labelsig) {
+    require(calibrate)
+    with(subset(x, padj < sigthresh & abs(log2FoldChange) > lfcthresh), textxy(log2FoldChange, -log10(pvalue), cex=textcx, ...))
+  }
+  legend(legendpos, xjust=1, yjust=1, legend=c(paste("FDR<",sigthresh,sep=""), paste("|LogFC|>",lfcthresh,sep=""), "both"), pch=20, col=c("red","orange","green"))
+}
+plot(resMF$log2FoldChange,-log10(resMF$padj),pch="+",cex=0.1,
+     xlab="Log Fold-Change from non-filtered eBayes",
+     ylab="-log10 P-Value from non-filtered eBayes",
+     main='Volcano Plot')
+dev.copy("file",png)
 sessionInfo()
 
+
+with(resMF, plot(log2FoldChange, -log10(pvalue), pch=20, main="Volcano plot", xlim=c(-5,5)))
+
+# Add colored points: red if padj<0.05, orange of log2FC>1, green if both)
+with(subset(resMF, padj<.05 ), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+with(subset(resMF, abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="orange"))
+with(subset(resMF, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="green"))
+
+# Label points with the textxy function from the calibrate plot
+library(calibrate)
+with(subset(resMF, padj<.05 & abs(log2FoldChange)>1), textxy(log2FoldChange, -log10(pvalue), labs=condition, cex=.8))

@@ -74,6 +74,7 @@ dev.off()
 
 # save data 'res' to csv!
 write.csv(as.data.frame(res),file='2014-8-6-DESeq2_analysis_GBX2group.csv')
+write.table(as.data.frame(assay(dds),file='2014-9-18-DESeq2-Gbx2group-dds.txt'),sep='\t')
 
 mcols(res, use.names=T)
 write.csv(as.data.frame(mcols(res,use.name=T)),file='2014-8-6-DESeq2-test-conditions-GBX2group.csv')

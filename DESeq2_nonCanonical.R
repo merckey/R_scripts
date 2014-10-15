@@ -72,7 +72,8 @@ resMF.up[1:200,]
 write.csv(as.data.frame(resMF.up.550),file="2014-8-31-DESeq2_lfc_2fold_up_batch2.csv")
 
 resMF.down.116 <- resMF.down[1:116,]
-write.csv(as.data.frame(resMF.down.116),file="2014-8-31-DESeq2_lfc_2fold_down_batch2.csv")
+
+write.csv(as.data.frame(resMF),file="2014-9-15-DESeq2_Canonical_final.csv")
 
 # transform raw distrbuted counts for clustering analysis
 rld <- rlogTransformation(dds, blind=T)

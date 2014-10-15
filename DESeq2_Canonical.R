@@ -63,11 +63,17 @@ head(resMF.down)
 resMF.up <- resMF[order(-resMF$log2FoldChange),]
 head(resMF.up)
 
-resMF.up[1:215,]
+resMF.up[1:800,]
 write.csv(as.data.frame(resMF.up.214 ),file="2014-9-4-DESeq2_lfc_2fold_up_Canonical.csv")
 
 resMF.down.116 <- resMF.down[1:116,]
 write.csv(as.data.frame(resMF.down.411),file="2014-9-4-DESeq2_lfc_2fold_down_Canonical.csv")
+
+write.csv(as.data.frame(resFC),file="2014-9-14-DESeq2_lfc_0.5_Canonical.csv")
+
+resUP <- results(ddsMF, lfcThreshold=0.5, altHypothesis='greater')
+resUP <- resUP[order(resUP$log2FoldChange),]
+write.csv(as.data.frame(resUP),file="2014-9-14-DESeq2_lfc_up_Canonical.csv")
 
 vsd <- varianceStabilizingTransformation(dds, blind=T)
 #heatmap of data
@@ -143,7 +149,7 @@ dev.off()
 # ideal for examining primary and matching mets
 # using plotPCAWithNames.R script - can change number of ntop
 
-plotPCAWithSampleNames = function(x, intgroup="condition", ntop=200)  # can change ntop from 200-500
+plotPCAWithSampleNames = function(x, intgroup="condition", ntop=500)  # can change ntop from 200-500
 {
   library("genefilter")
   library("lattice")
@@ -175,7 +181,7 @@ plotPCAWithSampleNames = function(x, intgroup="condition", ntop=200)  # can chan
       rep = FALSE)))
 }
 
-print(plotPCAWithSampleNames(rld, intgroup=c('condition')))
+print(plotPCAWithSampleNames(vsd, intgroup=c('condition')))
 dev.copy(png, "2014-8-9-DESeq2-PCA-noncanonical.png")
 dev.off()
 
